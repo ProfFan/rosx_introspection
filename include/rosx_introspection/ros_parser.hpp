@@ -71,15 +71,10 @@ public:
   };
 
   /// Default values are DISCARD_LARGE_ARRAYS and 100.
-  /// The maximum permissible value of max_array_size is 10.000 (but don't)
   void setMaxArrayPolicy(MaxArrayPolicy discard_entire_array, size_t max_array_size)
   {
     _discard_large_array = discard_entire_array;
     _max_array_size = max_array_size;
-    if (_max_array_size > 10000)
-    {
-      throw std::runtime_error("max_array_size limited to 10000 at most");
-    }
   }
 
   MaxArrayPolicy maxArrayPolicy() const
