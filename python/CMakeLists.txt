@@ -7,6 +7,7 @@ find_package(Python 3.8
   OPTIONAL_COMPONENTS Development.SABIModule)
 
 # Fetch nanobind via CPM
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/CPM.cmake")
 CPMAddPackage(
   NAME            nanobind
   GITHUB_REPOSITORY wjakob/nanobind

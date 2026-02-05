@@ -4,13 +4,13 @@ project(rosx_introspection LANGUAGES CXX VERSION 1.0.2)
 
 # create compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(CTest)
 
-option(CMAKE_POSITION_INDEPENDENT_CODE "Set -fPIC" ON)
+option(ROSX_POSITION_INDEPENDENT_CODE "Build rosx_introspection with position independent code" ON)
 option(ROSX_PYTHON_BINDINGS "Build Python bindings using nanobind" OFF)
 option(ROSX_HAS_JSON "Add JSON converters" ON)
 
-include(cmake/CPM.cmake)
-
+set(USING_ROS2 FALSE)
 find_package(ament_cmake QUIET)
 
 if (ament_cmake_FOUND)
@@ -44,6 +44,9 @@ target_include_directories(rosx_introspection PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 target_compile_features(rosx_introspection PUBLIC cxx_std_17)
+set_target_properties(rosx_introspection PROPERTIES
+    POSITION_INDEPENDENT_CODE ${ROSX_POSITION_INDEPENDENT_CODE}
+)
 
 if(USING_ROS2)
     target_link_libraries(rosx_introspection PUBLIC
@@ -57,6 +60,7 @@ if(ROSX_HAS_JSON)
     find_package(RapidJSON QUIET)
 
     if(NOT RapidJSON_FOUND)
+        include(cmake/CPM.cmake)
         message(STATUS "Downloading RapidJSON with CPM")
         CPMAddPackage(NAME rapidjson
             GIT_TAG v1.1.0
@@ -66,7 +70,11 @@ if(ROSX_HAS_JSON)
 
     target_compile_definitions(rosx_introspection PRIVATE ROSX_HAS_JSON)
     if(NOT USING_ROS2)
-        target_link_libraries(rosx_introspection PRIVATE rapidjson)
+        if(TARGET RapidJSON::rapidjson)
+            target_link_libraries(rosx_introspection PRIVATE RapidJSON::rapidjson)
+        elseif(TARGET rapidjson)
+            target_link_libraries(rosx_introspection PRIVATE rapidjson)
+        endif()
     endif()
 
 endif(ROSX_HAS_JSON)
@@ -84,15 +92,11 @@ if(BUILD_TESTING)
         ament_add_gtest(rosx_introspection_test
             test/test_parser.cpp
             test/test_ros2.cpp )
-
-        target_link_libraries(rosx_introspection PUBLIC
+        target_link_libraries(rosx_introspection_test PRIVATE
+            rosx_introspection
             ${sensor_msgs_TARGETS}
             ${geometry_msgs_TARGETS}
-            )
-        target_link_libraries(rosx_introspection_test rosx_introspection)
-
-        target_include_directories(rosx_introspection_test PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+        )
     endif(USING_ROS2)
 
     find_package(GTest REQUIRED)
@@ -100,10 +104,12 @@ if(BUILD_TESTING)
     add_executable(parser_test
             test/test_parser.cpp
             test/test_encoding.cpp)
-
-    target_link_libraries(parser_test rosx_introspection GTest::GTest GTest::Main)
-    target_include_directories(parser_test PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_link_libraries(parser_test PRIVATE rosx_introspection)
+    if(TARGET GTest::gtest AND TARGET GTest::gtest_main)
+        target_link_libraries(parser_test PRIVATE GTest::gtest_main)
+    else()
+        target_link_libraries(parser_test PRIVATE GTest::Main)
+    endif()
 
 endif(BUILD_TESTING)
 
