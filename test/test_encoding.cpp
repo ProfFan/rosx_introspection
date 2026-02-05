@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "rosx_introspection/deserializer.hpp"
+#include "rosx_introspection/ros_parser.hpp"
 #include "rosx_introspection/ros_message.hpp"
 #include "rosx_introspection/serializer.hpp"
 
@@ -124,4 +125,39 @@ TEST(NanoSerializer, RoundTrip) {
 
   // Verify all bytes have been consumed
   EXPECT_EQ(deserializer.bytesLeft(), 0);
+}
+
+TEST(Parser, LargeUInt8ArrayStoredAsBlob) {
+  const char* msg_def = "uint8[] data\n";
+  Parser parser("sample", ROSType("sample_msgs/Bytes"), msg_def);
+  parser.setMaxArrayPolicy(Parser::DISCARD_LARGE_ARRAYS, 10);
+  parser.setBlobPolicy(Parser::STORE_BLOB_AS_COPY);
+
+  NanoCDR_Serializer serializer;
+  serializer.reset();
+
+  constexpr uint32_t kSize = 32;
+  serializer.serializeUInt32(kSize);
+  for (uint32_t i = 0; i < kSize; i++) {
+    serializer.serialize(UINT8, Variant(static_cast<uint8_t>(i)));
+  }
+
+  const char* buffer_data = serializer.getBufferData();
+  const size_t buffer_size = serializer.getBufferSize();
+  std::vector<uint8_t> buffer_copy(buffer_data, buffer_data + buffer_size);
+
+  FlatMessage flat;
+  NanoCDR_Deserializer deserializer;
+  const bool parsed_all = parser.deserialize(buffer_copy, &flat, &deserializer);
+
+  EXPECT_TRUE(parsed_all);
+  EXPECT_TRUE(flat.value.empty());
+  ASSERT_EQ(flat.blob.size(), 1u);
+  ASSERT_EQ(flat.blob_storage.size(), 1u);
+
+  EXPECT_EQ(flat.blob[0].first.toStdString(), "sample/data[0]");
+  ASSERT_EQ(flat.blob[0].second.size(), kSize);
+  for (uint32_t i = 0; i < kSize; i++) {
+    EXPECT_EQ(flat.blob[0].second[i], static_cast<uint8_t>(i));
+  }
 }
